@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bagarre.io</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background-color: #111;
+      color: white;
+      text-align: center;
+      overflow: hidden;
+    }
+    canvas {
+      background: #222;
+      display: block;
+      margin: 20px auto;
+      border: 2px solid white;
+    }
+    .health {
+      display: flex;
+      justify-content: space-around;
+      margin: 10px 0;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .health-container {
+      width: 45%;
+      background: #500;
+      border-radius: 10px;
+      border: 1px solid #777;
+      overflow: hidden;
+      height: 20px;
+      position: relative;
+    }
+    .health-bar {
+      height: 100%;
+      background: limegreen;
+      width: 100%;
+      transition: width 0.1s linear;
+      box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+    }
+    .player-name {
+      font-size: 14px;
+      margin-bottom: 5px;
+      color: #ddd;
+    }
+    .damage-indicator {
+      position: absolute;
+      color: red;
+      font-weight: bold;
+      font-size: 20px;
+      animation: float-up 1s forwards;
+    }
+    @keyframes float-up {
+      0% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-50px); }
+    }
+    .reset-btn {
+      margin-top: 10px;
+      padding: 8px 16px;
+      background: #444;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      display: none;
+    }
+    .reset-btn:hover {
+      background: #666;
+    }
+    h1 {
+      text-shadow: 0 0 10px cyan, 0 0 20px orange;
+    }
+    .controls {
+      margin: 10px auto;
+      font-size: 14px;
+      color: #aaa;
+      max-width: 800px;
+      display: flex;
+      justify-content: space-around;
+    }
+    .health-text {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+      font-size: 12px;
+      text-shadow: 1px 1px 1px #000;
+      line-height: 20px;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <h1>Bagarre.io</h1>
+  <div class="health">
+    <div style="width: 45%;">
+      <div class="player-name">Joueur 1</div>
+      <div class="health-container">
+        <div class="health-text" id="health-text-1">100/100</div>
+        <div id="health1" class="health-bar"></div>
+      </div>
+    </div>
+    <div style="width: 45%;">
+      <div class="player-name">Joueur 2</div>
+      <div class="health-container">
+        <div class="health-text" id="health-text-2">100/100</div>
+        <div id="health2" class="health-bar"></div>
+      </div>
+    </div>
+  </div>
+  <canvas id="game" width="800" height="300"></canvas>
+  <div class="controls">
+    <div>Joueur 1: Q (gauche), D (droite), Z (attaque)</div>
+    <div>Joueur 2: ← → (déplacement), ↑ (attaque)</div>
+  </div>
+  <h2 id="winner"></h2>
+  <button id="resetButton" class="reset-btn">Rejouer</button>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    let gameActive = true;
+    const resetButton = document.getElementById('resetButton');
+
+    // Utiliser requestAnimationFrame pour une animation plus fluide
+    let lastTime = 0;
+    const FPS = 60;
+    const frameTime = 1000 / FPS;
+
+    // Définir quelques couleurs de base
+    const COLORS = {
+      PLAYER1: {
+        main: '#00A3E0',
+        secondary: '#0082B3',
+        highlight: '#40C0F0'
+      },
+      PLAYER2: {
+        main: '#FF7F00',
+        secondary: '#CC6600',
+        highlight: '#FFA040'
+      }
+    };
+
+    // Fonction pour dessiner un cercle
+    function drawCircle(x, y, radius, color) {
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    // Fonction pour dessiner un rectangle
+    function drawRect(x, y, width, height, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, width, height);
+    }
+
+    class Player {
+      constructor(x, colors, leftKey, rightKey, attackKey, facing, playerId) {
+        this.x = x;
+        this.y = 200;
+        this.width = 50;
+        this.height = 60;
+        this.colors = colors;
+        this.health = 100;
+        this.maxHealth = 100;
+        this.leftKey = leftKey;
+        this.rightKey = rightKey;
+        this.attackKey = attackKey;
+        this.attackCooldown = 0;
+        this.isAttacking = false;
+        this.facing = facing; // 'right' ou 'left'
+        this.playerId = playerId;
+        this.velocity = 0;
+        this.maxVelocity = 8;
+        this.acceleration = 1;
+        this.friction = 0.8;
+        this.hits = [];
+        this.attackStrength = 10;
+        this.lastHealth = this.health;
+        this.isHit = false;
+        this.hitTimer = 0;
+        this.walkFrame = 0;
+        this.walkTimer = 0;
+        this.isWalking = false;
+        this.blinkTimer = 0;
+        this.isBlinking = false;
+        this.idleTimer = 0;
+        this.shadow = {
+          x: this.x + this.width / 2,
+          y: 260,
+          radius: this.width * 0.7
+        };
+      }
+
+      draw() {
+        ctx.save();
+        
+        // Ombre sous le personnage
+        ctx.beginPath();
+        ctx.ellipse(
+          this.x + this.width / 2, 
+          260, 
+          this.width * 0.4, 
+          10, 
+          0, 0, Math.PI * 2
+        );
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fill();
+        
+        // Effet quand touché
+        if (this.isHit) {
+          ctx.globalAlpha = Math.sin(this.hitTimer * 0.5) * 0.3 + 0.7;
+        }
+        
+        // Déterminer les couleurs (normales ou touché)
+        const mainColor = this.isHit ? '#ff6666' : this.colors.main;
+        const secondaryColor = this.isHit ? '#ff4444' : this.colors.secondary;
+        const highlightColor = this.isHit ? '#ff8888' : this.colors.highlight;
+        
+        // Jambes
+        const legWidth = 12;
+        const legHeight = 20;
+        const legSpacing = 15;
+        let leftLegX, rightLegX;
+        
+        if (this.isWalking) {
+          // Animation des jambes pendant la marche
+          const legMove = Math.sin(this.walkFrame) * 8;
+          leftLegX = this.x + (this.width / 2) - legSpacing/2 - legWidth/2;
+          rightLegX = this.x + (this.width / 2) + legSpacing/2 - legWidth/2;
+          
+          // Dessiner les jambes
+          drawRect(leftLegX, this.y + this.height - legHeight + legMove, legWidth, legHeight, secondaryColor);
+          drawRect(rightLegX, this.y + this.height - legHeight - legMove, legWidth, legHeight, secondaryColor);
+        } else {
+          // Jambes au repos
+          leftLegX = this.x + (this.width / 2) - legSpacing/2 - legWidth/2;
+          rightLegX = this.x + (this.width / 2) + legSpacing/2 - legWidth/2;
+          drawRect(leftLegX, this.y + this.height - legHeight, legWidth, legHeight, secondaryColor);
+          drawRect(rightLegX, this.y + this.height - legHeight, legWidth, legHeight, secondaryColor);
+        }
+        
+        // Pieds
+        const footWidth = 16;
+        const footHeight = 6;
+        drawRect(leftLegX - 2, this.y + this.height, footWidth, footHeight, secondaryColor);
+        drawRect(rightLegX - 2, this.y + this.height, footWidth, footHeight, secondaryColor);
+        
+        // Corps
+        drawRect(this.x, this.y, this.width, this.height - legHeight, mainColor);
+        
+        // Ceinture
+        drawRect(this.x, this.y + (this.height - legHeight) - 8, this.width, 8, secondaryColor);
+        
+        // Tête
+        const headSize = 40;
+        const headX = this.x + this.width / 2;
+        const headY = this.y - headSize/2 + 5;
+        drawCircle(headX, headY, headSize/2, highlightColor);
+        
+        // Visage (dépend de la direction)
+        const faceDirection = this.facing === 'right' ? 1 : -1;
+        const eyeOffset = 7 * faceDirection;
+        
+        // Yeux
+        const eyeY = headY - 5;
+        const baseEyeX = headX + 2 * faceDirection;
+        
+        if (!this.isBlinking) {
+          // Yeux ouverts
+          drawCircle(baseEyeX - eyeOffset, eyeY, 4, 'white');
+          drawCircle(baseEyeX + eyeOffset, eyeY, 4, 'white');
+          
+          const pupilOffset = Math.min(5, Math.abs(this.velocity)) * Math.sign(this.velocity) * 0.3;
+          
+          drawCircle(baseEyeX - eyeOffset + (2 * faceDirection) + pupilOffset, eyeY, 2, 'black');
+          drawCircle(baseEyeX + eyeOffset + (2 * faceDirection) + pupilOffset, eyeY, 2, 'black');
+        } else {
+          // Yeux fermés (clignement)
+          ctx.beginPath();
+          ctx.moveTo(baseEyeX - eyeOffset - 4, eyeY);
+          ctx.lineTo(baseEyeX - eyeOffset + 4, eyeY);
+          ctx.strokeStyle = 'black';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          ctx.beginPath();
+          ctx.moveTo(baseEyeX + eyeOffset - 4, eyeY);
+          ctx.lineTo(baseEyeX + eyeOffset + 4, eyeY);
+          ctx.stroke();
+        }
+        
+        // Sourcils (expression selon la santé)
+        const browY = eyeY - 8;
+        const browLength = 6;
+        const healthRatio = this.health / this.maxHealth;
+        const browAngle = (1 - healthRatio) * 0.5; // Plus la santé est basse, plus les sourcils sont froncés
+        
+        ctx.beginPath();
+        ctx.moveTo(baseEyeX - eyeOffset - browLength, browY + browLength * browAngle);
+        ctx.lineTo(baseEyeX - eyeOffset + browLength, browY - browLength * browAngle);
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(baseEyeX + eyeOffset - browLength, browY - browLength * browAngle);
+        ctx.lineTo(baseEyeX + eyeOffset + browLength, browY + browLength * browAngle);
+        ctx.stroke();
+        
+        // Bouche (expression selon la santé)
+        const mouthY = headY + 5;
+        const mouthWidth = 12;
+        
+        ctx.beginPath();
+        if (healthRatio > 0.5) {
+          // Sourire
+          ctx.arc(headX, mouthY, mouthWidth, 0, Math.PI, false);
+        } else if (healthRatio > 0.2) {
+          // Neutre
+          ctx.moveTo(headX - mouthWidth, mouthY);
+          ctx.lineTo(headX + mouthWidth, mouthY);
+        } else {
+          // Triste
+          ctx.arc(headX, mouthY + mouthWidth, mouthWidth, Math.PI, 0, false);
+        }
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Cheveux/casque
+        // ctx.beginPath();
+        // ctx.arc(headX, headY - 8, headSize/2 - 4, Math.PI, 0, true);
+        // ctx.fillStyle = secondaryColor;
+        // ctx.fill();
+        
+        // Bras
+        const shoulderY = this.y + 15;
+        const armWidth = this.isAttacking ? 30 : 15;
+        const armHeight = 10;
+        const armX = this.facing === 'right' ? this.x + this.width : this.x - armWidth;
+        
+        // Épaule
+        drawCircle(
+          this.facing === 'right' ? this.x + this.width : this.x,
+          shoulderY, 
+          8, 
+          mainColor
+        );
+        
+        // Bras
+        drawRect(armX, shoulderY - armHeight/2, armWidth, armHeight, mainColor);
+        
+        // Poing
+        drawCircle(
+          this.facing === 'right' ? armX + armWidth : armX,
+          shoulderY, 
+          7, 
+          highlightColor
+        );
+        
+        // Zone de frappe (visualisation subtile)
+        if (this.isAttacking) {
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          const strikeX = this.facing === 'right' ? this.x + this.width : this.x - 40;
+          ctx.fillRect(strikeX, this.y, 40, this.height);
+          
+          // Effet visuel de l'attaque
+          const effectX = this.facing === 'right' ? this.x + this.width + 30 : this.x - 30;
+          
+          // Lignes d'impact
+          ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+          ctx.lineWidth = 2;
+          
+          for (let i = 0; i < 5; i++) {
+            const angle = Math.random() * Math.PI;
+            const length = 10 + Math.random() * 15;
+            
+            ctx.beginPath();
+            ctx.moveTo(effectX, this.y + this.height/2);
+            ctx.lineTo(
+              effectX + Math.cos(angle) * length * (this.facing === 'right' ? 1 : -1),
+              this.y + this.height/2 + Math.sin(angle) * length
+            );
+            ctx.stroke();
+          }
+          
+          drawCircle(effectX, this.y + this.height/2, 10, 'rgba(255,255,255,0.5)');
+        }
+        
+        ctx.restore();
+        
+        // Dessiner les indicateurs de dégâts
+        this.hits.forEach((hit) => {
+          ctx.fillStyle = `rgba(255,0,0,${hit.opacity})`;
+          ctx.font = `bold ${hit.size}px Arial`;
+          ctx.fillText('-' + hit.damage, hit.x, hit.y);
+        });
+      }
+
+      move(direction) {
+        const wasMoving = Math.abs(this.velocity) > 0.5;
+        
+        // Accélération avec inertie
+        if (direction !== 0) {
+          this.velocity += direction * this.acceleration;
+          this.velocity = Math.max(-this.maxVelocity, Math.min(this.maxVelocity, this.velocity));
+          this.facing = direction > 0 ? 'right' : 'left';
+          this.isWalking = true;
+        } else {
+          // Friction quand aucune touche n'est pressée
+          this.velocity *= this.friction;
+          if (Math.abs(this.velocity) < 0.5) {
+            this.isWalking = false;
+          }
+        }
+        
+        // Mouvement avec la vélocité
+        if (Math.abs(this.velocity) > 0.1) {
+          this.x += this.velocity;
+          this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+          
+          // Mise à jour de l'animation de marche
+          if (this.isWalking) {
+            this.walkFrame += 0.2;
+          }
+        } else {
+          this.velocity = 0;
+        }
+        
+        // Mise à jour de l'ombre
+        this.shadow.x = this.x + this.width / 2;
+      }
+
+      attack(opponent) {
+        if (this.attackCooldown === 0) {
+          this.isAttacking = true;
+          this.attackCooldown = 30;
+
+          const attackRange = 40;
+          const attackStart = this.facing === 'right' ? this.x + this.width : this.x - attackRange;
+          const inRange = (
+            opponent.x + opponent.width > attackStart &&
+            opponent.x < attackStart + attackRange &&
+            Math.abs(this.y - opponent.y) < this.height
+          );
+
+          if (inRange) {
+            const damage = this.attackStrength;
+            opponent.health -= damage;
+            opponent.health = Math.max(0, opponent.health);
+            
+            // Mettre à jour immédiatement la barre de vie
+            updateHealthBar(opponent.playerId, opponent.health);
+            
+            // Effet de recul
+            const knockback = this.facing === 'right' ? 15 : -15;
+            opponent.velocity = knockback;
+            
+            // Marquer comme touché pour l'effet visuel
+            opponent.isHit = true;
+            opponent.hitTimer = 0;
+            
+            // Ajouter un indicateur de dégât
+            opponent.hits.push({
+              damage: damage, 
+              x: opponent.x + opponent.width / 2,
+              y: opponent.y - 10,
+              color: 'red',
+              size: 24,
+              opacity: 1,
+              time: 0
+            });
+            
+            // Créer un élément DOM pour l'animation des dégâts
+            showDamageIndicator(opponent, damage);
+            
+            console.log("Joueur " + opponent.playerId + " touché, santé restante: " + opponent.health);
+          }
+
+          setTimeout(() => {
+            this.isAttacking = false;
+          }, 150);
+        }
+      }
+
+      update(deltaTime) {
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        
+        // Mettre à jour l'indicateur de coup
+        if (this.isHit) {
+          this.hitTimer += deltaTime;
+          if (this.hitTimer > 300) {
+            this.isHit = false;
+          }
+        }
+        
+        // Mettre à jour les indicateurs de dégâts
+        for (let i = this.hits.length - 1; i >= 0; i--) {
+          this.hits[i].time += deltaTime;
+          this.hits[i].y -= 0.5 * deltaTime / 16;
+          this.hits[i].opacity = 1 - (this.hits[i].time / 1000);
+          
+          if (this.hits[i].time > 1000) {
+            this.hits.splice(i, 1);
+          }
+        }
+        
+        // Gestion du clignement des yeux
+        this.blinkTimer += deltaTime;
+        if (this.blinkTimer > 3000 + Math.random() * 5000) {
+          this.isBlinking = true;
+          setTimeout(() => {
+            this.isBlinking = false;
+            this.blinkTimer = 0;
+          }, 150);
+        }
+        
+        // Animation en idle
+        this.idleTimer += deltaTime;
+        if (this.idleTimer > 2000) {
+          this.idleTimer = 0;
+        }
+        
+        // Vérifier si la santé a changé et mettre à jour la barre
+        if (this.lastHealth !== this.health) {
+          this.lastHealth = this.health;
+          updateHealthBar(this.playerId, this.health);
+        }
+      }
+    }
+
+    // Configuration des touches pour clavier AZERTY
+    const player1 = new Player(100, COLORS.PLAYER1, 'q', 'd', 'z', 'right', 1);
+    const player2 = new Player(650, COLORS.PLAYER2, 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'left', 2);
+
+    const keys = {};
+    
+    function showDamageIndicator(player, amount) {
+      const damageElem = document.createElement('div');
+      damageElem.className = 'damage-indicator';
+      damageElem.textContent = '-' + amount;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = rect.left + player.x + player.width / 2;
+      const y = rect.top + player.y;
+      
+      damageElem.style.left = x + 'px';
+      damageElem.style.top = y + 'px';
+      
+      document.body.appendChild(damageElem);
+      
+      setTimeout(() => {
+        document.body.removeChild(damageElem);
+      }, 1000);
+    }
+    
+    function updateHealthBar(playerId, health) {
+      // Mise à jour visuelle de la barre de vie
+      const healthBar = document.getElementById('health' + playerId);
+      const healthText = document.getElementById('health-text-' + playerId);
+      
+      if (healthBar && healthText) {
+        // Forcer la mise à jour immédiate en supprimant la transition
+        healthBar.style.transition = 'none';
+        // Appliquer la nouvelle largeur
+        healthBar.style.width = health + '%';
+        // Réactiver la transition après un court délai
+        setTimeout(() => {
+          healthBar.style.transition = 'width 0.1s linear';
+        }, 10);
+        
+        // Mettre à jour le texte de la barre de vie
+        healthText.textContent = `${health}/100`;
+        
+        // Changer la couleur de la barre de vie en fonction de la santé
+        if (health > 70) {
+          healthBar.style.background = 'limegreen';
+        } else if (health > 30) {
+          healthBar.style.background = 'yellow';
+        } else {
+          healthBar.style.background = 'red';
+        }
+        
+        console.log(`Barre de vie du joueur ${playerId} mise à jour: ${health}%`);
+      } else {
+        console.error(`Élément de barre de vie non trouvé pour le joueur ${playerId}`);
+      }
+    }
+
+    function checkWinner() {
+      if (player1.health <= 0 || player2.health <= 0) {
+        const winner = player1.health <= 0 ? 'Joueur 2 gagne !' : 'Joueur 1 gagne !';
+        document.getElementById('winner').textContent = winner;
+        document.getElementById('winner').style.color = player1.health <= 0 ? 'orange' : 'cyan';
+        gameActive = false;
+        resetButton.style.display = 'inline-block';
+      }
+    }
+
+    function resetGame() {
+      player1.health = 100;
+      player2.health = 100;
+      player1.x = 100;
+      player2.x = 650;
+      player1.isHit = false;
+      player2.isHit = false;
+      player1.hits = [];
+      player2.hits = [];
+      player1.lastHealth = 100;
+      player2.lastHealth = 100;
+      
+      // Réinitialiser les barres de vie
+      updateHealthBar(1, 100);
+      updateHealthBar(2, 100);
+      
+      document.getElementById('winner').textContent = '';
+      resetButton.style.display = 'none';
+      gameActive = true;
+      window.requestAnimationFrame(gameLoop);
+    }
+
+    // Dessiner le sol
+    function drawGround() {
+      const groundY = 260;
+      
+      // Sol principal
+      ctx.fillStyle = '#333';
+      ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+      
+      // Lignes du sol
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      
+      for (let i = 0; i < canvas.width; i += 30) {
+        ctx.beginPath();
+        ctx.moveTo(i, groundY);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+      }
+      
+      // Points aléatoires (petits détails)
+      ctx.fillStyle = '#2a2a2a';
+      for (let i = 0; i < 50; i++) {
+        const x = Math.random() * canvas.width;
+        const y = groundY + Math.random() * (canvas.height - groundY);
+        const size = Math.random() * 3 + 1;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function gameLoop(timestamp) {
+      // Calcul du delta time pour des animations cohérentes
+      const deltaTime = timestamp - lastTime || 0;
+      lastTime = timestamp;
+      
+      if (!gameActive) return;
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Dessiner le fond et le sol
+      drawGround();
+      
+      // Traitement des entrées
+      let direction1 = 0;
+      let direction2 = 0;
+      
+      if (keys[player1.leftKey]) direction1 = -1;
+      if (keys[player1.rightKey]) direction1 = 1;
+      if (keys[player1.attackKey]) player1.attack(player2);
+      
+      if (keys[player2.leftKey]) direction2 = -1;
+      if (keys[player2.rightKey]) direction2 = 1;
+      if (keys[player2.attackKey]) player2.attack(player1);
+      
+      // Mouvement
+      player1.move(direction1);
+      player2.move(direction2);
+      
+      // Mise à jour
+      player1.update(deltaTime);
+      player2.update(deltaTime);
+      
+      // Dessin des joueurs
+      player1.draw();
+      player2.draw();
+      
+      // Vérification de la victoire
+      checkWinner();
+      
+      // Continuer la boucle si le jeu est actif
+      if (gameActive) {
+        window.requestAnimationFrame(gameLoop);
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+      // Empêcher le défilement de la page avec les flèches
+      if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'z', 'q', 's', 'd'].includes(e.key)) {
+        e.preventDefault();
+      }
+    });
+    document.addEventListener('keyup', (e) => keys[e.key] = false);
+    
+    resetButton.addEventListener('click', resetGame);
+
+    // Initialiser les barres de vie au démarrage
+    window.addEventListener('DOMContentLoaded', () => {
+      updateHealthBar(1, player1.health);
+      updateHealthBar(2, player2.health);
+      console.log("Barres de vie initialisées");
+    });
+    
+    // S'assurer que les barres de vie sont à jour même avant le premier rendu
+    updateHealthBar(1, player1.health);
+    updateHealthBar(2, player2.health);
+    
+    // Démarrer la boucle de jeu
+    window.requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
