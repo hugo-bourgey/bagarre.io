@@ -12,11 +12,12 @@ class Player {
       this.attackKey = attackKey;
       this.attackCooldown = 0;
       this.isAttacking = false;
+      this.attackKeyReleased = true; // Nouvelle variable pour suivre si la touche d'attaque a été relâchée
       this.facing = facing; // 'right' ou 'left'
       this.playerId = playerId;
       this.velocity = 0;
-      this.maxVelocity = 8;
-      this.acceleration = 1;
+      this.maxVelocity = 4; // Vitesse réduite (était 8)
+      this.acceleration = 0.8; // Accélération légèrement réduite pour un mouvement plus fluide
       this.friction = 0.8;
       this.hits = [];
       this.attackStrength = 10;
@@ -275,9 +276,12 @@ class Player {
     }
   
     attack(opponent) {
-      if (this.attackCooldown === 0) {
+      // Vérifier si la touche d'attaque a été relâchée depuis la dernière attaque
+      // et si le temps de recharge est écoulé
+      if (this.attackCooldown === 0 && this.attackKeyReleased) {
         this.isAttacking = true;
         this.attackCooldown = 30;
+        this.attackKeyReleased = false; // La touche doit être relâchée avant de pouvoir attaquer à nouveau
   
         const attackRange = 40;
         const attackStart = this.facing === 'right' ? this.x + this.width : this.x - attackRange;
@@ -324,6 +328,11 @@ class Player {
           this.isAttacking = false;
         }, 150);
       }
+    }
+
+    // Méthode pour indiquer que la touche d'attaque a été relâchée
+    releaseAttackKey() {
+      this.attackKeyReleased = true;
     }
   
     update(deltaTime) {
@@ -377,6 +386,7 @@ class Player {
       this.hits = [];
       this.lastHealth = 100;
       this.velocity = 0;
+      this.attackKeyReleased = true;
       
       // Réinitialiser à la position de départ
       this.x = this.playerId === 1 ? 100 : 650;

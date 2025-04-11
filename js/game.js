@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
     // Configuration des touches pour clavier AZERTY
     const keys = {};
+    const previousKeys = {}; // Pour suivre l'état précédent des touches
     
     // Création des joueurs
     const player1 = new Player(100, COLORS.PLAYER1, 'q', 'd', 'z', 'right', 1, ctx, canvas);
@@ -36,6 +37,12 @@ document.addEventListener('DOMContentLoaded', function() {
       
       resetUI();
       gameActive = true;
+      
+      // Réinitialiser l'état des touches
+      for (const key in keys) {
+        previousKeys[key] = keys[key];
+      }
+      
       window.requestAnimationFrame(gameLoop);
     }
   
@@ -57,11 +64,27 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (keys[player1.leftKey]) direction1 = -1;
       if (keys[player1.rightKey]) direction1 = 1;
-      if (keys[player1.attackKey]) player1.attack(player2);
+      
+      // Vérifier si la touche d'attaque vient d'être pressée
+      if (keys[player1.attackKey] && previousKeys[player1.attackKey] !== true) {
+        player1.attack(player2);
+      }
+      // Vérifier si la touche d'attaque vient d'être relâchée
+      if (!keys[player1.attackKey] && previousKeys[player1.attackKey] === true) {
+        player1.releaseAttackKey();
+      }
       
       if (keys[player2.leftKey]) direction2 = -1;
       if (keys[player2.rightKey]) direction2 = 1;
-      if (keys[player2.attackKey]) player2.attack(player1);
+      
+      // Vérifier si la touche d'attaque vient d'être pressée
+      if (keys[player2.attackKey] && previousKeys[player2.attackKey] !== true) {
+        player2.attack(player1);
+      }
+      // Vérifier si la touche d'attaque vient d'être relâchée
+      if (!keys[player2.attackKey] && previousKeys[player2.attackKey] === true) {
+        player2.releaseAttackKey();
+      }
       
       // Mouvement
       player1.move(direction1);
@@ -77,6 +100,11 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Vérification de la victoire
       checkWinner();
+      
+      // Mettre à jour l'état précédent des touches
+      for (const key in keys) {
+        previousKeys[key] = keys[key];
+      }
       
       // Continuer la boucle si le jeu est actif
       if (gameActive) {
