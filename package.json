@@ -1,0 +1,15 @@
+{
+    "name": "bagarre-io",
+    "version": "1.0.0",
+    "description": "Jeu de combat 2D",
+    "main": "index.html",
+    "scripts": {
+      "start": "serve",
+      "dev": "serve -s ."
+    },
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+      "serve": "^14.0.1"
+    }
+  }

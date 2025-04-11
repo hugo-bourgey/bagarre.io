@@ -1,0 +1,19 @@
+# Dossiers et fichiers de l'environnement de développement
+node_modules/
+.vscode/
+.idea/
+.DS_Store
+
+# Fichiers de log et de debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+debug.log
+
+# Fichiers de build
+/dist
+/build
+
+# Fichiers temporaires
+*.tmp
+*.temp

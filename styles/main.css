@@ -1,0 +1,101 @@
+body {
+    margin: 0;
+    font-family: sans-serif;
+    background-color: #111;
+    color: white;
+    text-align: center;
+    overflow: hidden;
+  }
+  
+  canvas {
+    background: #222;
+    display: block;
+    margin: 20px auto;
+    border: 2px solid white;
+  }
+  
+  .health {
+    display: flex;
+    justify-content: space-around;
+    margin: 10px 0;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .health-container {
+    width: 45%;
+    background: #500;
+    border-radius: 10px;
+    border: 1px solid #777;
+    overflow: hidden;
+    height: 20px;
+    position: relative;
+  }
+  
+  .health-bar {
+    height: 100%;
+    background: limegreen;
+    width: 100%;
+    transition: width 0.1s linear;
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+  }
+  
+  .player-name {
+    font-size: 14px;
+    margin-bottom: 5px;
+    color: #ddd;
+  }
+  
+  .damage-indicator {
+    position: absolute;
+    color: red;
+    font-weight: bold;
+    font-size: 20px;
+    animation: float-up 1s forwards;
+  }
+  
+  @keyframes float-up {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-50px); }
+  }
+  
+  .reset-btn {
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: #444;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: none;
+  }
+  
+  .reset-btn:hover {
+    background: #666;
+  }
+  
+  h1 {
+    text-shadow: 0 0 10px cyan, 0 0 20px orange;
+  }
+  
+  .controls {
+    margin: 10px auto;
+    font-size: 14px;
+    color: #aaa;
+    max-width: 800px;
+    display: flex;
+    justify-content: space-around;
+  }
+  
+  .health-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    color: white;
+    font-weight: bold;
+    font-size: 12px;
+    text-shadow: 1px 1px 1px #000;
+    line-height: 20px;
+    z-index: 5;
+  }
